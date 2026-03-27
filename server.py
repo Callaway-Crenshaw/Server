@@ -28,7 +28,7 @@ def cw_get(path: str, params: dict = None):
 def cw_get_all(path: str, params: dict = None) -> list:
     """Fetch all pages of results from a ConnectWise endpoint."""
     params = dict(params or {})
-    params["pageSize"] = 50
+    params["pageSize"] = 1000
     all_results = []
     page = 1
     while True:
@@ -37,7 +37,7 @@ def cw_get_all(path: str, params: dict = None) -> list:
         if not batch:
             break
         all_results.extend(batch)
-        if len(batch) < 50:
+        if len(batch) < 1000:
             break
         page += 1
     return all_results
@@ -67,7 +67,6 @@ def get_open_tickets(
         conditions.append(f'owner/identifier="{assigned_to}"')
     params = {
         "conditions": " and ".join(conditions),
-        "pageSize": min(page_size, 250),
         "orderBy": "priority/sort asc, dateEntered desc",
         "fields": "id,summary,status/name,priority/name,board/name,owner/identifier,company/name,dateEntered,_info/lastUpdated"
     }
@@ -98,7 +97,6 @@ def search_tickets(
         conditions.append(f'company/name="{company}"')
     params = {
         "conditions": " and ".join(conditions),
-        "pageSize": min(page_size, 250),
         "orderBy": "dateEntered desc",
         "fields": "id,summary,status/name,priority/name,board/name,owner/identifier,company/name,dateEntered"
     }
@@ -112,7 +110,6 @@ def get_queue_summary() -> dict:
     total open, unassigned count, and breakdown by status, priority, and board."""
     params = {
         "conditions": "closedFlag=false",
-        "pageSize": 250,
         "fields": "id,status/name,priority/name,board/name,owner/identifier"
     }
     tickets = cw_get_all("/service/tickets", params)
@@ -141,7 +138,6 @@ def query_tickets(
     This allows answering any question about tickets not covered by the other tools."""
     params = {
         "conditions": conditions,
-        "pageSize": min(page_size, 250),
         "orderBy": "dateEntered desc",
         "fields": fields or "id,summary,status/name,priority/name,board/name,owner/identifier,company/name,dateEntered"
     }
