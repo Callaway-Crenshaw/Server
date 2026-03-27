@@ -25,6 +25,23 @@ def cw_get(path: str, params: dict = None):
     r.raise_for_status()
     return r.json()
 
+def cw_get_all(path: str, params: dict = None) -> list:
+    """Fetch all pages of results from a ConnectWise endpoint."""
+    params = dict(params or {})
+    params["pageSize"] = 50
+    all_results = []
+    page = 1
+    while True:
+        params["page"] = page
+        batch = cw_get(path, params)
+        if not batch:
+            break
+        all_results.extend(batch)
+        if len(batch) < 50:
+            break
+        page += 1
+    return all_results
+
 # --- MCP Server ---
 mcp = FastMCP(
     "ConnectWise",
@@ -54,7 +71,7 @@ def get_open_tickets(
         "orderBy": "priority/sort asc, dateEntered desc",
         "fields": "id,summary,status/name,priority/name,board/name,owner/identifier,company/name,dateEntered,_info/lastUpdated"
     }
-    result = cw_get("/service/tickets", params)
+    result = cw_get_all("/service/tickets", params)
     return {"count": len(result), "tickets": result}
 
 
@@ -85,7 +102,7 @@ def search_tickets(
         "orderBy": "dateEntered desc",
         "fields": "id,summary,status/name,priority/name,board/name,owner/identifier,company/name,dateEntered"
     }
-    result = cw_get("/service/tickets", params)
+    result = cw_get_all("/service/tickets", params)
     return {"count": len(result), "tickets": result}
 
 
@@ -98,7 +115,7 @@ def get_queue_summary() -> dict:
         "pageSize": 250,
         "fields": "id,status/name,priority/name,board/name,owner/identifier"
     }
-    tickets = cw_get("/service/tickets", params)
+    tickets = cw_get_all("/service/tickets", params)
     by_status, by_priority, by_board, unassigned = {}, {}, {}, 0
     for t in tickets:
         s = t.get("status", {}).get("name", "Unknown")
@@ -128,7 +145,7 @@ def query_tickets(
         "orderBy": "dateEntered desc",
         "fields": fields or "id,summary,status/name,priority/name,board/name,owner/identifier,company/name,dateEntered"
     }
-    result = cw_get("/service/tickets", params)
+    result = cw_get_all("/service/tickets", params)
     return {"count": len(result), "tickets": result}
 
 
