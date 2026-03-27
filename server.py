@@ -38,10 +38,7 @@ def get_open_tickets(
     board: str = None,
     priority: str = None,
     assigned_to: str = None,
-    page_size: int = 25
-) -> dict:
-    """Get open tickets from the ConnectWise service queue.
-    Optionally filter by board name, priority, or assigned member."""
+    page_size: int = 100
     conditions = ["closedFlag=false"]
     if board:
         conditions.append(f'board/name="{board}"')
@@ -72,9 +69,7 @@ def search_tickets(
     query: str,
     status: str = None,
     company: str = None,
-    page_size: int = 25
-) -> dict:
-    """Search tickets by keyword in summary. Optionally filter by status or company."""
+    page_size: int = 100
     conditions = [f'summary contains "{query}"']
     if status:
         conditions.append(f'status/name="{status}"')
@@ -96,7 +91,7 @@ def get_queue_summary() -> dict:
     total open, unassigned count, and breakdown by status, priority, and board."""
     params = {
         "conditions": "closedFlag=false",
-        "pageSize": 1000,
+        "pageSize": 250,
         "fields": "id,status/name,priority/name,board/name,owner/identifier"
     }
     tickets = cw_get("/service/tickets", params)
