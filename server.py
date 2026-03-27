@@ -126,4 +126,4 @@ def query_tickets(conditions: str, fields: str = None, page_size: int = 25) -> d
 
 
 if __name__ == "__main__":
-    mcp.run(transport="http")
+    mcp.run(transport="streamable-http")
