@@ -31,8 +31,6 @@ mcp = FastMCP(
     "ConnectWise",
     host="0.0.0.0",
     port=int(os.environ.get("PORT", 8000)),
-    json_response=True,
-    stateless_http=True,
 )
 
 @mcp.tool()
@@ -132,4 +130,4 @@ def query_tickets(conditions: str, fields: str = None, page_size: int = 25) -> d
 
 
 if __name__ == "__main__":
-    mcp.run(transport="streamable-http")
+    mcp.run(transport="sse")
