@@ -155,4 +155,5 @@ def query_tickets(conditions: str, fields: str = None, page_size: int = 25) -> d
 
 
 if __name__ == "__main__":
-    mcp.run(transport="sse")
+    port = int(os.environ.get("PORT", 8000))
+    mcp.run(transport="sse", host="0.0.0.0", port=port)
