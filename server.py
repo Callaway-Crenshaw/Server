@@ -42,7 +42,7 @@ def get_open_tickets(
 ) -> dict:
     """Get open tickets from the ConnectWise service queue.
     Optionally filter by board name, priority, or assigned member."""
-    conditions = ["status/name!='Closed'", "status/name!='Completed'"]
+    conditions = ["closedFlag=false"]
     if board:
         conditions.append(f'board/name="{board}"')
     if priority:
@@ -95,7 +95,7 @@ def get_queue_summary() -> dict:
     """Get a high-level summary of the current ticket queue:
     total open, unassigned count, and breakdown by status, priority, and board."""
     params = {
-        "conditions": "status/name!='Closed' and status/name!='Completed'",
+        "conditions": "closedFlag=false",
         "pageSize": 1000,
         "fields": "id,status/name,priority/name,board/name,owner/identifier"
     }
