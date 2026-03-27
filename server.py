@@ -27,7 +27,13 @@ def cw_get(path: str, params: dict = None):
     return r.json()
 
 # --- MCP Server (Streamable HTTP transport) ---
-mcp = FastMCP("ConnectWise")
+mcp = FastMCP(
+    "ConnectWise",
+    host="0.0.0.0",
+    port=int(os.environ.get("PORT", 8000)),
+    json_response=True,
+    stateless_http=True,
+)
 
 @mcp.tool()
 def get_open_tickets(
