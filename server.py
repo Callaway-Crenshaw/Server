@@ -1,7 +1,6 @@
 import os
 import base64
 import httpx
-import uvicorn
 from mcp.server.fastmcp import FastMCP
 
 # --- Config from environment variables ---
@@ -26,7 +25,7 @@ def cw_get(path: str, params: dict = None):
     r.raise_for_status()
     return r.json()
 
-# --- MCP Server (Streamable HTTP transport) ---
+# --- MCP Server ---
 mcp = FastMCP(
     "ConnectWise",
     host="0.0.0.0",
@@ -38,7 +37,10 @@ def get_open_tickets(
     board: str = None,
     priority: str = None,
     assigned_to: str = None,
-    page_size: int = 100
+    page_size: int = 100,
+) -> dict:
+    """Get open tickets from the ConnectWise service queue.
+    Optionally filter by board name, priority, or assigned member."""
     conditions = ["closedFlag=false"]
     if board:
         conditions.append(f'board/name="{board}"')
@@ -48,7 +50,7 @@ def get_open_tickets(
         conditions.append(f'owner/identifier="{assigned_to}"')
     params = {
         "conditions": " and ".join(conditions),
-        "pageSize": min(page_size, 100),
+        "pageSize": min(page_size, 250),
         "orderBy": "priority/sort asc, dateEntered desc",
         "fields": "id,summary,status/name,priority/name,board/name,owner/identifier,company/name,dateEntered,_info/lastUpdated"
     }
@@ -69,7 +71,9 @@ def search_tickets(
     query: str,
     status: str = None,
     company: str = None,
-    page_size: int = 100
+    page_size: int = 100,
+) -> dict:
+    """Search tickets by keyword in summary. Optionally filter by status or company."""
     conditions = [f'summary contains "{query}"']
     if status:
         conditions.append(f'status/name="{status}"')
@@ -77,7 +81,7 @@ def search_tickets(
         conditions.append(f'company/name="{company}"')
     params = {
         "conditions": " and ".join(conditions),
-        "pageSize": min(page_size, 100),
+        "pageSize": min(page_size, 250),
         "orderBy": "dateEntered desc",
         "fields": "id,summary,status/name,priority/name,board/name,owner/identifier,company/name,dateEntered"
     }
@@ -110,13 +114,17 @@ def get_queue_summary() -> dict:
 
 
 @mcp.tool()
-def query_tickets(conditions: str, fields: str = None, page_size: int = 25) -> dict:
+def query_tickets(
+    conditions: str,
+    fields: str = None,
+    page_size: int = 100,
+) -> dict:
     """Advanced: run a raw ConnectWise API query with custom conditions.
     Use ConnectWise query syntax e.g. \"company/name='Acme' and status/name='New'\"
     This allows answering any question about tickets not covered by the other tools."""
     params = {
         "conditions": conditions,
-        "pageSize": min(page_size, 100),
+        "pageSize": min(page_size, 250),
         "orderBy": "dateEntered desc",
         "fields": fields or "id,summary,status/name,priority/name,board/name,owner/identifier,company/name,dateEntered"
     }
