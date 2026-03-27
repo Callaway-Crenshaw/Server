@@ -1,2 +1,2 @@
-fastmcp>=3.0.0
+mcp[cli]>=1.6.0
 httpx
