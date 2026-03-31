@@ -230,6 +230,51 @@ def update_ticket(
     if not ops:
         return {"error": "No fields provided to update."}
     return cw_patch(f"/service/tickets/{ticket_id}", ops)
+@mcp.tool()
+def get_ticket_templates() -> dict:
+    """List all existing service ticket templates in ConnectWise Manage."""
+    results = cw_get_all("/service/ticketTemplates")
+    return {"count": len(results), "templates": results}
+
+
+@mcp.tool()
+def create_ticket_template(
+    name: str,
+    board_name: str,
+    summary: str = None,
+    priority_name: str = None,
+    status_name: str = None,
+    type_name: str = None,
+    subtype_name: str = None,
+    item_name: str = None,
+    assigned_to: str = None,
+    initial_description: str = None,
+) -> dict:
+    """Create a new service ticket template in ConnectWise Manage.
+    Templates can be used to pre-fill common ticket fields when creating tickets.
+    Returns the created template object including its new ID."""
+    body = {
+        "name": name,
+        "board": {"name": board_name},
+    }
+    if summary:
+        body["summary"] = summary
+    if priority_name:
+        body["priority"] = {"name": priority_name}
+    if status_name:
+        body["status"] = {"name": status_name}
+    if type_name:
+        body["type"] = {"name": type_name}
+    if subtype_name:
+        body["subType"] = {"name": subtype_name}
+    if item_name:
+        body["item"] = {"name": item_name}
+    if assigned_to:
+        body["owner"] = {"identifier": assigned_to}
+    if initial_description:
+        body["initialDescription"] = initial_description
+
+    return cw_post("/service/ticketTemplates", body)
 
 
 if __name__ == "__main__":
