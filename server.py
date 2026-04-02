@@ -25,8 +25,8 @@ def cw_get(path: str, params: dict = None):
     r.raise_for_status()
     return r.json()
 
-def cw_get_all(path: str, params: dict = None) -> list:
-    """Fetch all pages of results from a ConnectWise endpoint."""
+def cw_get_all(path: str, params: dict = None, max_pages: int = 10) -> list:
+    """Fetch pages from a ConnectWise endpoint with a safety cap."""
     params = dict(params or {})
     params["pageSize"] = 1000
     all_results = []
@@ -37,7 +37,7 @@ def cw_get_all(path: str, params: dict = None) -> list:
         if not batch:
             break
         all_results.extend(batch)
-        if len(batch) < 1000:
+        if len(batch) < 1000 or page >= max_pages:
             break
         page += 1
     return all_results
@@ -83,9 +83,11 @@ def get_open_tickets(
     params = {
         "conditions": " and ".join(conditions),
         "orderBy": "priority/sort asc, dateEntered desc",
-        "fields": "id,summary,status/name,priority/name,board/name,owner/identifier,company/name,dateEntered,_info/lastUpdated"
+        "fields": "id,summary,status/name,priority/name,board/name,owner/identifier,company/name,dateEntered,_info/lastUpdated",
+        "pageSize": page_size,
+        "page": 1,
     }
-    result = cw_get_all("/service/tickets", params)
+    result = cw_get("/service/tickets", params)
     return {"count": len(result), "tickets": result}
 
 @mcp.tool()
@@ -111,32 +113,57 @@ def search_tickets(
     params = {
         "conditions": " and ".join(conditions),
         "orderBy": "dateEntered desc",
-        "fields": "id,summary,status/name,priority/name,board/name,owner/identifier,company/name,dateEntered"
+        "fields": "id,summary,status/name,priority/name,board/name,owner/identifier,company/name,dateEntered",
+        "pageSize": page_size,
+        "page": 1,
     }
-    result = cw_get_all("/service/tickets", params)
+    result = cw_get("/service/tickets", params)
     return {"count": len(result), "tickets": result}
 
 @mcp.tool()
 def get_queue_summary() -> dict:
     """Get a high-level summary of the current ticket queue:
     total open, unassigned count, and breakdown by status, priority, and board."""
-    params = {
+
+    def get_count(conditions: str) -> int:
+        r = httpx.get(
+            f"{BASE_URL}/service/tickets/count",
+            headers=cw_headers(),
+            params={"conditions": conditions},
+            timeout=30,
+        )
+        r.raise_for_status()
+        return r.json().get("count", 0)
+
+    total      = get_count("closedFlag=false")
+    unassigned = get_count("closedFlag=false and owner/identifier=null")
+
+    # Sample most recent 1000 tickets for breakdown
+    sample = cw_get("/service/tickets", {
         "conditions": "closedFlag=false",
-        "fields": "id,status/name,priority/name,board/name,owner/identifier"
-    }
-    tickets = cw_get_all("/service/tickets", params)
-    by_status, by_priority, by_board, unassigned = {}, {}, {}, 0
-    for t in tickets:
+        "fields": "status/name,priority/name,board/name,owner/identifier",
+        "orderBy": "dateEntered desc",
+        "pageSize": 1000,
+        "page": 1,
+    })
+
+    by_status, by_priority, by_board = {}, {}, {}
+    for t in sample:
         s = t.get("status", {}).get("name", "Unknown")
         p = t.get("priority", {}).get("name", "Unknown")
         b = t.get("board", {}).get("name", "Unknown")
         by_status[s]   = by_status.get(s, 0) + 1
         by_priority[p] = by_priority.get(p, 0) + 1
         by_board[b]    = by_board.get(b, 0) + 1
-        if not t.get("owner"):
-            unassigned += 1
-    return {"total_open": len(tickets), "unassigned": unassigned,
-            "by_status": by_status, "by_priority": by_priority, "by_board": by_board}
+
+    return {
+        "total_open": total,
+        "unassigned": unassigned,
+        "by_status": by_status,
+        "by_priority": by_priority,
+        "by_board": by_board,
+        "note": f"Breakdown based on most recent 1,000 tickets out of {total} total open.",
+    }
 
 @mcp.tool()
 def query_tickets(
@@ -150,11 +177,10 @@ def query_tickets(
     params = {
         "conditions": conditions,
         "orderBy": "dateEntered desc",
-        "fields": fields or "id,summary,status/name,priority/name,board/name,owner/identifier,company/name,dateEntered"
+        "fields": fields or "id,summary,status/name,priority/name,board/name,owner/identifier,company/name,dateEntered",
     }
     result = cw_get_all("/service/tickets", params)
     return {"count": len(result), "tickets": result}
-
 
 
 if __name__ == "__main__":
