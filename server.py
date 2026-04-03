@@ -173,13 +173,21 @@ def query_tickets(
 ) -> dict:
     """Advanced: run a raw ConnectWise API query with custom conditions.
     Use ConnectWise query syntax e.g. \"company/name='Acme' and status/name='New'\"
-    This allows answering any question about tickets not covered by the other tools."""
+    This allows answering any question about tickets not covered by the other tools.
+
+    For unassigned tickets, use: owner/identifier=null
+    """
+    # FIX 1: Use cw_get (single page) instead of cw_get_all (which ignores page_size
+    #         and fetches up to 10,000 records regardless).
+    # FIX 2: Actually pass page_size into the params (was previously ignored).
     params = {
         "conditions": conditions,
         "orderBy": "dateEntered desc",
         "fields": fields or "id,summary,status/name,priority/name,board/name,owner/identifier,company/name,dateEntered",
+        "pageSize": page_size,  # FIX 2: was missing from params dict
+        "page": 1,
     }
-    result = cw_get_all("/service/tickets", params)
+    result = cw_get("/service/tickets", params)  # FIX 1: was cw_get_all
     return {"count": len(result), "tickets": result}
 
 
