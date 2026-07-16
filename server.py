@@ -1,7 +1,11 @@
 import os
 import base64
+import secrets
+import time
 import httpx
 from mcp.server.fastmcp import FastMCP
+from starlette.requests import Request
+from starlette.responses import JSONResponse, RedirectResponse
 
 # --- Config from environment variables ---
 CW_SITE        = os.environ["CW_SITE"]
@@ -60,6 +64,104 @@ mcp = FastMCP(
     host="0.0.0.0",
     port=int(os.environ.get("PORT", 8000)),
 )
+
+
+# =====================================================================
+# Minimal OAuth shim
+#
+# This server has no real user accounts, so this shim auto-approves
+# every authorization request instead of showing a login screen. It
+# exists ONLY to satisfy Claude's OAuth handshake during connector
+# setup. It does not add real security beyond what this server already
+# has (which, before this shim, was: none). State is in-memory and
+# resets on restart -- that's fine for this purpose.
+# =====================================================================
+
+_clients = {}
+_auth_codes = {}
+_tokens = {}
+
+
+@mcp.custom_route("/.well-known/oauth-authorization-server", methods=["GET"])
+async def oauth_metadata(request: Request):
+    base = str(request.base_url).rstrip("/")
+    return JSONResponse({
+        "issuer": base,
+        "authorization_endpoint": f"{base}/authorize",
+        "token_endpoint": f"{base}/token",
+        "registration_endpoint": f"{base}/register",
+        "response_types_supported": ["code"],
+        "grant_types_supported": ["authorization_code", "refresh_token"],
+        "code_challenge_methods_supported": ["S256"],
+        "token_endpoint_auth_methods_supported": ["none", "client_secret_post"],
+    })
+
+
+@mcp.custom_route("/register", methods=["POST"])
+async def oauth_register(request: Request):
+    body = await request.json()
+    client_id = secrets.token_urlsafe(16)
+    client_secret = secrets.token_urlsafe(32)
+    redirect_uris = body.get("redirect_uris", [])
+
+    _clients[client_id] = {
+        "client_secret": client_secret,
+        "redirect_uris": redirect_uris,
+    }
+
+    return JSONResponse({
+        "client_id": client_id,
+        "client_secret": client_secret,
+        "redirect_uris": redirect_uris,
+        "token_endpoint_auth_method": "client_secret_post",
+        "grant_types": ["authorization_code", "refresh_token"],
+        "response_types": ["code"],
+    }, status_code=201)
+
+
+@mcp.custom_route("/authorize", methods=["GET"])
+async def oauth_authorize(request: Request):
+    params = request.query_params
+    client_id = params.get("client_id")
+    redirect_uri = params.get("redirect_uri")
+    state = params.get("state")
+    code_challenge = params.get("code_challenge")
+
+    if not client_id or not redirect_uri:
+        return JSONResponse({"error": "invalid_request"}, status_code=400)
+
+    code = secrets.token_urlsafe(24)
+    _auth_codes[code] = {
+        "client_id": client_id,
+        "redirect_uri": redirect_uri,
+        "code_challenge": code_challenge,
+        "created": time.time(),
+    }
+
+    redirect_url = f"{redirect_uri}?code={code}"
+    if state:
+        redirect_url += f"&state={state}"
+    return RedirectResponse(url=redirect_url, status_code=302)
+
+
+@mcp.custom_route("/token", methods=["POST"])
+async def oauth_token(request: Request):
+    form = await request.form()
+    grant_type = form.get("grant_type")
+    code = form.get("code")
+
+    if grant_type != "authorization_code" or not code or code not in _auth_codes:
+        return JSONResponse({"error": "invalid_grant"}, status_code=400)
+
+    _auth_codes.pop(code)
+    access_token = secrets.token_urlsafe(32)
+    _tokens[access_token] = {"created": time.time()}
+
+    return JSONResponse({
+        "access_token": access_token,
+        "token_type": "Bearer",
+        "expires_in": 3600,
+    })
 
 
 # --- Read Tools ---
@@ -177,17 +279,14 @@ def query_tickets(
 
     For unassigned tickets, use: owner/identifier=null
     """
-    # FIX 1: Use cw_get (single page) instead of cw_get_all (which ignores page_size
-    #         and fetches up to 10,000 records regardless).
-    # FIX 2: Actually pass page_size into the params (was previously ignored).
     params = {
         "conditions": conditions,
         "orderBy": "dateEntered desc",
         "fields": fields or "id,summary,status/name,priority/name,board/name,owner/identifier,company/name,dateEntered",
-        "pageSize": page_size,  # FIX 2: was missing from params dict
+        "pageSize": page_size,
         "page": 1,
     }
-    result = cw_get("/service/tickets", params)  # FIX 1: was cw_get_all
+    result = cw_get("/service/tickets", params)
     return {"count": len(result), "tickets": result}
 
 
