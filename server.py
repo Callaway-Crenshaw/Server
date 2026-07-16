@@ -84,7 +84,7 @@ _tokens = {}
 
 @mcp.custom_route("/.well-known/oauth-authorization-server", methods=["GET"])
 async def oauth_metadata(request: Request):
-    base = str(request.base_url).rstrip("/")
+    base = f"https://{request.headers.get('host', request.url.hostname)}"
     return JSONResponse({
         "issuer": base,
         "authorization_endpoint": f"{base}/authorize",
